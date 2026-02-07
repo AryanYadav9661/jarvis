@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jarvis — LLM Edition (Local)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">Jarvis · LLM Edition</div>
+      <div class="controls">
+        <label class="switch" title="Toggle LLM (server)">
+          <input id="useLLM" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+        <span class="label">Use LLM</span>
+        <button id="micBtn" class="mic" title="Start/stop voice">🎤</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="left">
+        <div id="status" class="status">Idle — ready</div>
+
+        <div id="conversation" class="conversation" aria-live="polite">
+          <div class="assistant">Jarvis online. Try: "time", "joke", "search: cats", or toggle Use LLM and ask anything.</div>
+        </div>
+
+        <div class="input-row">
+          <input id="textInput" placeholder='Type a command (e.g. time, joke, search:term) or ask LLM when enabled' />
+          <button id="sendBtn">Send</button>
+        </div>
+      </section>
+
+      <aside class="right">
+        <div class="card">
+          <h3>Voice</h3>
+          <select id="voiceSelect"></select>
+          <div class="slider-row">
+            <label>Rate <input id="rate" type="range" min="0.6" max="1.6" step="0.1" value="1"></label>
+            <label>Pitch <input id="pitch" type="range" min="0.6" max="1.8" step="0.1" value="1"></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Quick</h3>
+          <div class="quick">
+            <button data-cmd="hello">Say Hello</button>
+            <button data-cmd="time">What time is it?</button>
+            <button data-cmd="joke">Tell a joke</button>
+            <button data-cmd="search:latest tech news">Search web</button>
+          </div>
+        </div>
+
+        <div class="card small">
+          <h4>Notes & Reminders</h4>
+          <button id="showNotes">Show Notes</button>
+          <button id="showRmd">Show Reminders</button>
+        </div>
+
+        <div class="card small">
+          <h4>LLM settings</h4>
+          <p class="muted">LLM mode calls <code>/api/chat</code> on this server. Implement server with your provider API key (see README below).</p>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <small>Best in Chrome. Backend required to use LLM. Do not store API keys in client JS.</small>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
