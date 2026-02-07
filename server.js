@@ -1,61 +1,100 @@
-// server.js
-// Minimal Express server that serves static files from ./public
-// and exposes POST /api/chat for LLM calls using OpenAI (server-side).
-// Install: npm install express cors openai dotenv
+// server.js  — Gemini (Generative Language) proxy
+// Minimal Express server that serves ./public and proxies POST /api/chat to Gemini REST.
+// Requires Node 18+ (for global fetch).
+// npm install express cors dotenv
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const { OpenAI } = require('openai'); // official SDK
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
-
-if(!OPENAI_KEY){
-  console.warn('WARNING: OPENAI_API_KEY not set. /api/chat will return errors.');
-}
-
-const client = new OpenAI({ apiKey: OPENAI_KEY });
-
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// serve frontend
+// env vars
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview'; // change if you prefer
+const PORT = process.env.PORT || 3000;
+
+if(!GEMINI_API_KEY){
+  console.warn('WARNING: GEMINI_API_KEY not set. /api/chat will return errors.');
+}
+
+// Serve static frontend files from /public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// POST /api/chat
+/**
+ * POST /api/chat
+ * Body: { prompt: string }
+ * Returns: { reply: string } (or error)
+ */
 app.post('/api/chat', async (req, res) => {
   try {
     const { prompt } = req.body;
-    if(!prompt || typeof prompt !== 'string' || prompt.trim().length === 0){
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
-    if(!OPENAI_KEY) {
-      return res.status(500).json({ error: 'Server not configured with OPENAI_API_KEY' });
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'Server not configured with GEMINI_API_KEY' });
     }
 
-    // Use a chat/completion call. Model choice may change — use a reasonable one available to you.
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // change as needed
+    // Build Gemini REST URL (Generative Language API)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
 
-    const response = await client.chat.completions.create({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 600,
-      temperature: 0.7
+    // Body shape according to docs: contents -> parts -> text
+    const payload = {
+      contents: [
+        {
+          parts: [
+            { text: prompt }
+          ]
+        }
+      ],
+      // optional: you can add temperature, candidate_count, safety_settings, etc.
+      // Example:
+      // temperature: 0.7
+    };
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Quickstart shows x-goog-api-key header for API-key auth.
+        'x-goog-api-key': GEMINI_API_KEY
+      },
+      body: JSON.stringify(payload)
     });
 
-    // attempt to extract text
-    const reply = response?.choices?.[0]?.message?.content || (response?.choices?.[0]?.text) || 'No reply';
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.error('Gemini API error', resp.status, txt);
+      return res.status(502).json({ error: 'Gemini API error', detail: txt, status: resp.status });
+    }
+
+    const j = await resp.json();
+
+    // Try to robustly extract text from the response structure.
+    // REST responses often have: candidates[0].content.parts[0].text
+    let reply = 'No reply from Gemini';
+    try {
+      reply = j?.candidates?.[0]?.content?.[0]?.parts?.[0]?.text
+           || j?.candidates?.[0]?.content?.parts?.[0]?.text
+           || j?.candidates?.[0]?.content?.parts?.[0]?.text
+           || j?.candidates?.[0]?.content?.[0]?.text
+           || JSON.stringify(j);
+    } catch (e) {
+      reply = JSON.stringify(j);
+    }
+
     return res.json({ reply });
   } catch (err) {
-    console.error('LLM error', err);
+    console.error('Server /api/chat error', err);
     return res.status(500).json({ error: err.message || String(err) });
   }
 });
 
-// fallback to index.html for SPA routes
+// SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=> console.log('Server running on http://localhost:'+PORT));
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
